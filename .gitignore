@@ -112,6 +112,7 @@ InitTestScene*.unity*
 .idea/
 .vscode/
 *.code-workspace
+.vsconfig
 
 # OS-generated files
 .DS_Store
