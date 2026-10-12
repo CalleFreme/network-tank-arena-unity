@@ -9,13 +9,16 @@ namespace NetworkTankArena.Tanks
         public float Turn { get; }
         public Vector3 AimWorldPoint { get; }
         public bool HasAimPoint { get; }
+        public bool FireRequested { get; }
 
-        public TankControlIntent(float throttle, float turn, Vector3 aimWorldPoint, bool hasAimPoint)
+        public TankControlIntent(float throttle, float turn, Vector3 aimWorldPoint, bool hasAimPoint,
+            bool fireRequested = false)
         {
             Throttle = throttle;
             Turn = turn;
             AimWorldPoint = aimWorldPoint;
             HasAimPoint = hasAimPoint;
+            FireRequested = fireRequested;
         }
     }
 }
