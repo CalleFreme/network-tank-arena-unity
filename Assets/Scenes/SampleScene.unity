@@ -1482,7 +1482,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2768130323478917212, guid: cb1cb6a8c2c2a4c49b9095585c9e5612, type: 3}
       propertyPath: projectileSpeed
-      value: 1000
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 6292897801873429655, guid: cb1cb6a8c2c2a4c49b9095585c9e5612, type: 3}
       propertyPath: m_Center.y
