@@ -5,6 +5,10 @@ namespace NetworkTankArena.Tanks
     /// <summary>Planar gameplay maths. Yaw is measured in degrees, with +Z forward.</summary>
     public static class TankMath
     {
+        public static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+
+        public static bool IsFinite(Vector3 value) => IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+
         public static float TurnYaw(float yaw, float turn, float turnSpeed, float deltaTime)
         {
             if (deltaTime <= 0f)
@@ -25,11 +29,16 @@ namespace NetworkTankArena.Tanks
 
         public static bool TryGetAimYaw(Vector3 origin, Vector3 aimPoint, out float yaw)
         {
+            yaw = 0f;
+            if (!IsFinite(origin) || !IsFinite(aimPoint))
+                return false;
+
             float x = aimPoint.x - origin.x;
             float z = aimPoint.z - origin.z;
+            float distanceSquared = x * x + z * z;
 
             // A target within one centimetre has no useful horizontal direction.
-            if (x * x + z * z <= 0.0001f)
+            if (!IsFinite(distanceSquared) || distanceSquared <= 0.0001f)
             {
                 yaw = 0f;
                 return false;

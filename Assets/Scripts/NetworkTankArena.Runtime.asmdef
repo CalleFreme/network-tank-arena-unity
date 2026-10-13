@@ -2,6 +2,7 @@
     "name": "NetworkTankArena.Runtime",
     "rootNamespace": "NetworkTankArena",
     "references": [
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.Netcode.Runtime"
     ]
 }

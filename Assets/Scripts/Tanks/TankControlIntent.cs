@@ -20,5 +20,12 @@ namespace NetworkTankArena.Tanks
             HasAimPoint = hasAimPoint;
             FireRequested = fireRequested;
         }
+
+        /// <summary>Clamp axes and discard non-finite aim at the gameplay boundary.</summary>
+        public TankControlIntent Sanitize() => new TankControlIntent(
+            TankMath.IsFinite(Throttle) ? Mathf.Clamp(Throttle, -1f, 1f) : 0f,
+            TankMath.IsFinite(Turn) ? Mathf.Clamp(Turn, -1f, 1f) : 0f,
+            TankMath.IsFinite(AimWorldPoint) ? AimWorldPoint : Vector3.zero,
+            HasAimPoint && TankMath.IsFinite(AimWorldPoint), FireRequested);
     }
 }

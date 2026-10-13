@@ -12,14 +12,27 @@ namespace NetworkTankArena.Presentation
 
         private void Awake()
         {
-            if (target == null || transform == target || transform.IsChildOf(target) ||
+            if ((target != null && (transform == target || transform.IsChildOf(target))) ||
                 (followOffset - Vector3.up * lookAtHeight).sqrMagnitude < 0.0001f ||
                 new Vector2(followOffset.x, followOffset.z).sqrMagnitude < 0.0001f)
             {
-                Debug.LogError("TankFollowCamera needs an independent gameplay-root target and an offset " +
+                Debug.LogError("TankFollowCamera needs an independent gameplay-root target when assigned, and an offset " +
                     "with horizontal separation from that target.", this);
                 enabled = false;
             }
+        }
+
+        /// <summary>The scene camera is bound only to the locally owned spawned gameplay root.</summary>
+        public void SetTarget(Transform gameplayRoot)
+        {
+            if (gameplayRoot != null && (transform == gameplayRoot || transform.IsChildOf(gameplayRoot)))
+            {
+                Debug.LogError("The gameplay camera must be independent of the tank hierarchy.", this);
+                return;
+            }
+
+            target = gameplayRoot;
+            FollowTarget();
         }
 
         private void Start()
