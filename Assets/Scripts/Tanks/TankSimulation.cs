@@ -27,15 +27,24 @@ namespace NetworkTankArena.Tanks
         /// </summary>
         public void Simulate(TankControlIntent intent, float deltaTime)
         {
-            if (!isActiveAndEnabled || !characterController.enabled || deltaTime <= 0f)
+            if (!isActiveAndEnabled || !characterController.enabled ||
+                !TankMath.IsFinite(deltaTime) || deltaTime <= 0f)
                 return;
 
+            intent = intent.Sanitize();
             float yaw = TankMath.TurnYaw(transform.eulerAngles.y, intent.Turn, turnSpeed, deltaTime);
             transform.rotation = Quaternion.Euler(0f, yaw, 0f);
             characterController.Move(TankMath.ForwardDisplacement(yaw, intent.Throttle, moveSpeed, deltaTime));
 
             if (intent.HasAimPoint && TankMath.TryGetAimYaw(TurretOrigin, intent.AimWorldPoint, out float aimYaw))
                 TurretYaw = aimYaw;
+        }
+
+        /// <summary>Clients consume server-written canonical yaw without running movement simulation.</summary>
+        public void ApplyReplicatedTurretYaw(float yaw)
+        {
+            if (TankMath.IsFinite(yaw))
+                TurretYaw = Mathf.Repeat(yaw, 360f);
         }
     }
 }

@@ -1,4 +1,5 @@
 using NetworkTankArena.Combat;
+using NetworkTankArena.Networking;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
@@ -20,21 +21,21 @@ namespace NetworkTankArena.Tanks
         private InputAction turnAction;
         private InputAction aimPositionAction;
         private InputAction fireAction;
-        private bool enabledThrottle;
-        private bool enabledTurn;
-        private bool enabledAimPosition;
-        private bool enabledFire;
+        private NetworkTankController networkTank;
+        private bool waitingForNeutralMovement;
         private readonly FireRequestLatch fireLatch = new FireRequestLatch();
 
         private void OnEnable()
         {
             fireLatch.RequireRelease();
-            throttleAction = throttle != null ? throttle.action : null;
-            turnAction = turn != null ? turn.action : null;
-            aimPositionAction = aimPosition != null ? aimPosition.action : null;
-            fireAction = fire != null ? fire.action : null;
+            waitingForNeutralMovement = true;
+            // Private action instances have an explicit lifetime and never disable project-wide actions.
+            throttleAction = throttle != null ? throttle.action?.Clone() : null;
+            turnAction = turn != null ? turn.action?.Clone() : null;
+            aimPositionAction = aimPosition != null ? aimPosition.action?.Clone() : null;
+            fireAction = fire != null ? fire.action?.Clone() : null;
 
-            if (tank == null || weapon == null || weapon.Tank != tank || aimCamera == null ||
+            if (tank == null || (networkTank == null && (weapon == null || weapon.Tank != tank)) || aimCamera == null ||
                 throttleAction == null || turnAction == null || aimPositionAction == null || fireAction == null ||
                 throttleAction.expectedControlType != "Axis" || turnAction.expectedControlType != "Axis" ||
                 aimPositionAction.expectedControlType != "Vector2" || fireAction.type != InputActionType.Button ||
@@ -47,38 +48,37 @@ namespace NetworkTankArena.Tanks
                 return;
             }
 
-            // Project-wide actions may already be enabled. Preserve their existing lifecycle.
-            // These actions are intended for one active local controller.
-            enabledThrottle = EnableIfNeeded(throttleAction);
-            enabledTurn = EnableIfNeeded(turnAction);
-            enabledAimPosition = EnableIfNeeded(aimPositionAction);
-            enabledFire = EnableIfNeeded(fireAction);
+            throttleAction.Enable();
+            turnAction.Enable();
+            aimPositionAction.Enable();
+            fireAction.Enable();
         }
 
         private void OnDisable()
         {
             fireLatch.RequireRelease();
-            if (enabledThrottle)
-                throttleAction.Disable();
-            if (enabledTurn)
-                turnAction.Disable();
-            if (enabledAimPosition)
-                aimPositionAction.Disable();
-            if (enabledFire)
-                fireAction.Disable();
-
-            enabledThrottle = enabledTurn = enabledAimPosition = enabledFire = false;
+            waitingForNeutralMovement = true;
+            if (networkTank != null)
+                networkTank.SubmitLocalIntent(default);
+            throttleAction?.Dispose();
+            turnAction?.Dispose();
+            aimPositionAction?.Dispose();
+            fireAction?.Dispose();
+            throttleAction = turnAction = aimPositionAction = fireAction = null;
         }
 
         private void OnApplicationFocus(bool hasFocus)
         {
             if (!hasFocus)
+            {
                 fireLatch.RequireRelease();
+                waitingForNeutralMovement = true;
+            }
         }
 
         private void Update()
         {
-            if (tank == null)
+            if (tank == null || (networkTank != null && !networkTank.CanReadLocalInput))
                 return;
 
             TankControlIntent intent = default;
@@ -89,12 +89,25 @@ namespace NetworkTankArena.Tanks
                     throttleAction.enabled && turnAction.enabled;
                 bool fireRequested = TryReadFireHeld(out bool fireHeld) &&
                     fireLatch.TryRequest(fireHeld, fireAction.WasPressedThisFrame(), canRequestFire);
-                intent = new TankControlIntent(throttleAction.ReadValue<float>(), turnAction.ReadValue<float>(),
+                float throttleValue = throttleAction.ReadValue<float>();
+                float turnValue = turnAction.ReadValue<float>();
+                if (waitingForNeutralMovement)
+                {
+                    waitingForNeutralMovement = Mathf.Abs(throttleValue) > 0.01f || Mathf.Abs(turnValue) > 0.01f;
+                    throttleValue = turnValue = 0f;
+                }
+                intent = new TankControlIntent(throttleValue, turnValue,
                     aimPoint, hasAimPoint, fireRequested);
             }
             else
             {
                 fireLatch.RequireRelease();
+            }
+
+            if (networkTank != null)
+            {
+                networkTank.SubmitLocalIntent(intent);
+                return;
             }
 
             tank.Simulate(intent, Time.deltaTime);
@@ -143,12 +156,16 @@ namespace NetworkTankArena.Tanks
             return true;
         }
 
-        private static bool EnableIfNeeded(InputAction action)
+        /// <summary>Called by the scene session when a local owner spawns or releases control.</summary>
+        public void BindNetworkTank(NetworkTankController player, Camera camera)
         {
-            bool wasDisabled = !action.enabled;
-            if (wasDisabled)
-                action.Enable();
-            return wasDisabled;
+            enabled = false;
+            networkTank = player;
+            tank = player != null ? player.GetComponent<TankSimulation>() : null;
+            weapon = null; // Combat is intentionally disabled in the multiplayer movement lab.
+            aimCamera = camera;
+            if (player != null && player.CanReadLocalInput)
+                enabled = true;
         }
     }
 }

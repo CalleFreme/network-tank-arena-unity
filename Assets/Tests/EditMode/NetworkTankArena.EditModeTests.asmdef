@@ -3,6 +3,8 @@
     "rootNamespace": "NetworkTankArena.Tests",
     "references": [
         "NetworkTankArena.Runtime",
+        "Unity.InputSystem",
+        "Unity.Netcode.Runtime",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
