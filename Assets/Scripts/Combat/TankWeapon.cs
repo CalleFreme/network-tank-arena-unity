@@ -19,6 +19,7 @@ namespace NetworkTankArena.Combat
         private WeaponCooldown cooldown = new WeaponCooldown();
 
         public TankSimulation Tank => tank;
+        internal Projectile ProjectilePrefab => projectilePrefab;
 
         private void Awake()
         {
@@ -47,15 +48,21 @@ namespace NetworkTankArena.Combat
         public bool TryFire() => TryFire(Time.timeAsDouble);
 
         // The local adapter and boundary tests share the same shot path and explicit simulation clock.
-        internal bool TryFire(double simulationTime)
+        internal bool TryFire(double simulationTime) =>
+            TryFire(simulationTime, tank != null ? tank.TurretYaw : 0f, out _);
+
+        /// <summary>The caller derives shot yaw. Firing never writes the tank's continuous turret aim.
+        /// An accepted blocked launch returns true with no projectile.</summary>
+        internal bool TryFire(double simulationTime, float shotYaw, out Projectile spawnedProjectile)
         {
+            spawnedProjectile = null;
             if (!isActiveAndEnabled || Time.timeScale <= 0f || !HasValidConfiguration() ||
                 !tank.isActiveAndEnabled)
                 return false;
 
             CharacterController controller = tank.GetComponent<CharacterController>();
             if (controller == null || !controller.enabled ||
-                !FiringPose.TryCalculate(tank.TurretOrigin, tank.TurretYaw, muzzleForwardOffset, out FiringPose pose) ||
+                !FiringPose.TryCalculate(tank.TurretOrigin, shotYaw, muzzleForwardOffset, out FiringPose pose) ||
                 cooldown == null || !cooldown.TryConsume(simulationTime, cooldownSeconds))
                 return false;
 
@@ -76,6 +83,10 @@ namespace NetworkTankArena.Combat
                     Destroy(projectile.gameObject);
                 else
                     DestroyImmediate(projectile.gameObject);
+            }
+            else
+            {
+                spawnedProjectile = projectile;
             }
             return true;
         }

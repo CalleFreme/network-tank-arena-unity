@@ -329,7 +329,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: NetworkTankArena.Runtime::NetworkTankArena.Combat.TankWeapon
   tank: {fileID: 4329641642182668789}
-  projectilePrefab: {fileID: 8288718090186284681, guid: e1185fcc1230b1441a0daf9d82ee33c3, type: 3}
+  projectilePrefab: {fileID: 8288718090186284681, guid: 67d8e45c12bd945448d7f46a41dbe45e, type: 3}
   cooldownSeconds: 0.3
   muzzleForwardOffset: 1.3
   projectileSpeed: 20

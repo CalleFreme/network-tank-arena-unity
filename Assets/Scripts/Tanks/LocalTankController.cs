@@ -107,6 +107,9 @@ namespace NetworkTankArena.Tanks
             if (networkTank != null)
             {
                 networkTank.SubmitLocalIntent(intent);
+                // A press is discrete: never retain it until the rate-limited movement sender runs.
+                if (intent.FireRequested)
+                    networkTank.SubmitLocalFire(intent.AimWorldPoint);
                 return;
             }
 
@@ -162,7 +165,7 @@ namespace NetworkTankArena.Tanks
             enabled = false;
             networkTank = player;
             tank = player != null ? player.GetComponent<TankSimulation>() : null;
-            weapon = null; // Combat is intentionally disabled in the multiplayer movement lab.
+            weapon = null; // Network owners submit requests; only the server invokes their weapon.
             aimCamera = camera;
             if (player != null && player.CanReadLocalInput)
                 enabled = true;

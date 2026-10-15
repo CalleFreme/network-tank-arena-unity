@@ -17,6 +17,8 @@ namespace NetworkTankArena.Networking
         [SerializeField] private TankFollowCamera followCamera;
         [SerializeField] private Transform hostSpawn;
         [SerializeField] private Transform clientSpawn;
+        [SerializeField] private NetworkDamageTestTarget damageTargetPrefab;
+        [SerializeField] private Transform damageTargetSpawn;
         [SerializeField] private ushort port = 7777;
 
         private readonly Dictionary<ulong, int> spawnSlots = new Dictionary<ulong, int>();
@@ -76,12 +78,17 @@ namespace NetworkTankArena.Networking
                 !(networkManager.NetworkConfig.NetworkTransport is UnityTransport transport) ||
                 networkManager.NetworkConfig.PlayerPrefab == null ||
                 networkManager.NetworkConfig.PlayerPrefab.GetComponent<NetworkTankController>() == null ||
+                damageTargetPrefab == null || !damageTargetPrefab.enabled || !damageTargetPrefab.gameObject.activeSelf ||
+                !damageTargetPrefab.TryGetComponent(out NetworkObject _) || damageTargetSpawn == null ||
+                !TankMath.IsFinite(damageTargetSpawn.position) || !TankMath.IsFinite(damageTargetSpawn.eulerAngles.y) ||
+                !networkManager.NetworkConfig.Prefabs.Contains(damageTargetPrefab.gameObject) ||
                 !networkManager.NetworkConfig.PlayerPrefab.TryGetComponent(out NetworkTransform rootTransform) ||
                 rootTransform.AuthorityMode != NetworkTransform.AuthorityModes.Server)
             {
                 status = "Session setup is incomplete; see the Console.";
                 Debug.LogError("Assign the scene input/camera, two clear spawn points, a UnityTransport, " +
-                    "and the network tank Player Prefab on a client-server NetworkManager.", this);
+                    "the network tank Player Prefab, and a registered damage target prefab/marker " +
+                    "on a client-server NetworkManager. See docs/NETWORK_COMBAT.md.", this);
                 return;
             }
 
@@ -91,6 +98,14 @@ namespace NetworkTankArena.Networking
             networkManager.ConnectionApprovalCallback = ApproveConnection;
             transport.SetConnectionData("127.0.0.1", port, "127.0.0.1");
             bool started = host ? networkManager.StartHost() : networkManager.StartClient();
+            if (started && host)
+            {
+                // Exactly one server-owned target per new Host session. Clients receive this spawn
+                // and its current NetworkVariables, including on a later connection.
+                NetworkDamageTestTarget target = Instantiate(damageTargetPrefab, damageTargetSpawn.position,
+                    Quaternion.Euler(0f, damageTargetSpawn.eulerAngles.y, 0f));
+                target.NetworkObject.Spawn();
+            }
             status = started ? (host ? $"Hosting on localhost:{port}." : "Connecting to localhost...") : "Session could not start.";
         }
 
