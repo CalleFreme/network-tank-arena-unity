@@ -1,7 +1,7 @@
 # Network Tank Arena
 
-A two-player movement and turret-aim starter for the Network Programming course.
-Thursday's lab explores latency, jitter, packet loss and interpolation.
+A two-player authoritative movement and combat starter for the Network Programming course.
+Thursday's lab explores network conditions; Friday adds discrete server-authoritative combat.
 
 Use **Unity 6.3.26f1 (6000.3.26f1)**. In Unity Hub, choose **Add project from disk**
 and select this repository folder, then open `Assets/Scenes/SampleScene.unity`.
@@ -17,8 +17,13 @@ canonical turret aim. Clients display replicated movement with NetworkTransform
 interpolation enabled by default. Turret yaw is separately replicated and applied
 directly, without interpolation.
 
-There is no client movement prediction or reconciliation. Multiplayer combat is
-intentionally disabled: left click must not create projectiles.
+There is no client movement prediction or reconciliation. Left click submits one
+reliable fire request; only the server fires, sweeps projectiles, and damages the
+persistent test target. No tank health/death/respawn/score is implemented.
+
+**Before starting this contribution in Play Mode, complete the Inspector wiring in
+[docs/NETWORK_COMBAT.md](docs/NETWORK_COMBAT.md).** The committed scene/prefabs still
+have the movement-lab wiring. Session startup rejects missing combat target setup.
 
 ## Start with Multiplayer Play Mode
 
@@ -142,7 +147,10 @@ Multiplayer Tools' **Hierarchy Network Debug View**.
 - Transport is direct localhost (`127.0.0.1:7777`); there is no Relay or
   dedicated-server startup.
 - NGO scene management is disabled: both instances load SampleScene themselves.
-- Multiplayer combat remains disabled, and prediction/reconciliation is deferred.
+- Combat requires the one-time wiring in [NETWORK_COMBAT.md](docs/NETWORK_COMBAT.md).
+- Projectile interpolation can lag the authoritative collision; very short-lived
+  projectiles may disappear before a remote frame renders them. Prediction,
+  reconciliation, tank health, death, respawn, and score remain deferred.
 - Movement intent becomes neutral after **0.5 seconds without an accepted update
   at the server**. This measures server receipt silence, not a command's original
   age. A delayed newer command can still be accepted. After focus loss, movement

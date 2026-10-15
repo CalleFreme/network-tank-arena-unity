@@ -186,6 +186,68 @@ namespace NetworkTankArena.Tests
         }
 
         [Test]
+        public void ShotYawIsImmutableAndDoesNotWriteContinuousTurretAim()
+        {
+            TankWeapon weapon = CreateWeapon(out TankSimulation tank);
+            tank.ApplyReplicatedTurretYaw(45f);
+            tank.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+            GameObject visual = CreateObject("cosmetic muzzle", TestOrigin + Vector3.up * 20f);
+            visual.transform.SetParent(tank.transform, true);
+            visual.transform.rotation = Quaternion.Euler(45f, 270f, 10f);
+            var fire = new NetworkTankArena.Networking.ServerFireRequest();
+            Assert.That(fire.TryReceive(1, 1, 1, tank.TurretOrigin + Vector3.right * 10f,
+                tank.TurretOrigin, out float shotYaw), Is.True);
+
+            Assert.That(weapon.TryFire(10d, shotYaw, out Projectile shot), Is.True);
+            Assert.That(shot, Is.Not.Null);
+            Assert.That(tank.TurretYaw, Is.EqualTo(45f));
+            Assert.That(Vector3.Distance(shot.Position, tank.TurretOrigin + Vector3.right * 1.3f), Is.LessThan(0.001f));
+            Assert.That(Vector3.Distance(shot.Direction, Vector3.right), Is.LessThan(0.001f));
+            tank.ApplyReplicatedTurretYaw(270f);
+            tank.transform.position += Vector3.forward * 10f;
+            Vector3 origin = shot.Position;
+            shot.Simulate(0.1f);
+            Assert.That(Vector3.Distance(shot.Position, origin + Vector3.right * 2f), Is.LessThan(0.001f));
+            Assert.That(tank.TurretYaw, Is.EqualTo(270f));
+        }
+
+        [Test]
+        public void BlockedRequestedYawConsumesCooldownAndDamagesOnlyOnceWithoutChangingAim()
+        {
+            TankWeapon weapon = CreateWeapon(out TankSimulation tank);
+            tank.ApplyReplicatedTurretYaw(180f);
+            DamageTestTarget target = CreateBox("requested launch obstruction",
+                tank.TurretOrigin + Vector3.right * 0.65f, Vector3.one * 0.2f).AddComponent<DamageTestTarget>();
+            Assert.That(weapon.TryFire(10d, 90f, out Projectile shot), Is.True);
+            Assert.That(shot, Is.Null);
+            Assert.That(weapon.TryFire(10.1d, 90f, out _), Is.False);
+            Assert.That(target.HitCount, Is.EqualTo(1));
+            Assert.That(target.AccumulatedDamage, Is.EqualTo(25));
+            Assert.That(tank.TurretYaw, Is.EqualTo(180f));
+        }
+
+        [Test]
+        public void ExternalDriverSuppressesAutomaticTravelButCanStepTheSameCore()
+        {
+            Projectile shot = CreateProjectile(CreateObject("owner", TestOrigin));
+            shot.UseExternalDriver();
+            shot.SimulateLocalFrame(Time.frameCount + 1, 0.1f);
+            Assert.That(shot.Position, Is.EqualTo(TestOrigin));
+            Assert.That(shot.Age, Is.Zero);
+            shot.Simulate(0.1f);
+            Assert.That(shot.Position.z, Is.EqualTo(TestOrigin.z + 2f).Within(0.001f));
+        }
+
+        [Test]
+        public void InvalidShotYawDoesNotConsumeCooldown()
+        {
+            TankWeapon weapon = CreateWeapon(out _);
+            Assert.That(weapon.TryFire(10d, float.NaN, out _), Is.False);
+            Assert.That(weapon.TryFire(10d, 0f, out Projectile shot), Is.True);
+            Assert.That(shot, Is.Not.Null);
+        }
+
+        [Test]
         public void ProjectileRejectsInvalidPoseAndPhysicsShape()
         {
             GameObject owner = CreateObject("owner", TestOrigin);

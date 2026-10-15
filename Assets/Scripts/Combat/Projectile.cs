@@ -6,6 +6,7 @@ namespace NetworkTankArena.Combat
     public sealed class Projectile : MonoBehaviour
     {
         private bool initialized;
+        private bool externallyDriven;
         private int creationFrame;
         private GameObject source;
         private Transform owner;
@@ -19,6 +20,10 @@ namespace NetworkTankArena.Combat
         public Vector3 Direction { get; private set; }
         public float Age { get; private set; }
         public bool IsTerminal { get; private set; }
+        internal bool IsInitialized => initialized;
+
+        // The network adapter owns stepping and destruction; the local prefab keeps its old adapter.
+        internal void UseExternalDriver() => externallyDriven = true;
 
         internal bool HasPhysicsShape => GetComponentInParent<Rigidbody>() != null ||
             GetComponentInParent<Collider>() != null || GetComponentsInChildren<Rigidbody>(true).Length != 0 ||
@@ -57,7 +62,7 @@ namespace NetworkTankArena.Combat
         internal void SimulateLocalFrame(int currentFrame, float deltaTime)
         {
             // Enforce next-frame travel regardless of when Unity first calls this component's adapter.
-            if (currentFrame != creationFrame)
+            if (!externallyDriven && currentFrame != creationFrame)
                 Simulate(deltaTime);
         }
 
@@ -101,7 +106,7 @@ namespace NetworkTankArena.Combat
         private void Remove()
         {
             // EditMode tests retain the terminal instance for assertions and destroy it in teardown.
-            if (Application.isPlaying)
+            if (!externallyDriven && Application.isPlaying)
                 Destroy(gameObject);
         }
     }
