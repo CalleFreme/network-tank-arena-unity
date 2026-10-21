@@ -20,6 +20,8 @@ namespace NetworkTankArena.Networking
         [SerializeField] private NetworkDamageTestTarget damageTargetPrefab;
         [SerializeField] private Transform damageTargetSpawn;
         [SerializeField] private ushort port = 7777;
+        [SerializeField] private NetworkMatchState matchStatePrefab;
+
 
         private readonly Dictionary<ulong, int> spawnSlots = new Dictionary<ulong, int>();
         private NetworkTankController localPlayer;
@@ -97,7 +99,10 @@ namespace NetworkTankArena.Networking
             networkManager.NetworkConfig.ConnectionApproval = true;
             networkManager.ConnectionApprovalCallback = ApproveConnection;
             transport.SetConnectionData("127.0.0.1", port, "127.0.0.1");
-            bool started = host ? networkManager.StartHost() : networkManager.StartClient();
+            bool started = host
+                ? networkManager.StartHost()
+                : networkManager.StartClient();
+            
             if (started && host)
             {
                 // Exactly one server-owned target per new Host session. Clients receive this spawn
@@ -105,6 +110,9 @@ namespace NetworkTankArena.Networking
                 NetworkDamageTestTarget target = Instantiate(damageTargetPrefab, damageTargetSpawn.position,
                     Quaternion.Euler(0f, damageTargetSpawn.eulerAngles.y, 0f));
                 target.NetworkObject.Spawn();
+
+                matchStatePrefab = Instantiate(matchStatePrefab);
+                matchStatePrefab.NetworkObject.Spawn();
             }
             status = started ? (host ? $"Hosting on localhost:{port}." : "Connecting to localhost...") : "Session could not start.";
         }
@@ -198,12 +206,48 @@ namespace NetworkTankArena.Networking
 
         private void OnGUI()
         {
-            GUILayout.BeginArea(new Rect(12f, 12f, 300f, 150f), GUI.skin.box);
-            GUILayout.Label("Network Tank Arena — two-player lab");
-            GUILayout.Label(networkManager != null && networkManager.IsConnectedClient ?
-                (networkManager.IsHost ? "Host connected" : "Client connected") : status);
-            GUI.enabled = networkManager != null && !networkManager.ShutdownInProgress;
-            if (networkManager != null && networkManager.IsListening)
+            GUILayout.BeginArea(
+                new Rect(12f, 12f, 300f, 205f),
+                GUI.skin.box);
+
+            GUILayout.Label("Network Tank Arena - two-player lab");
+
+            GUILayout.Label(
+                networkManager != null &&
+                networkManager.IsConnectedClient
+                    ? (networkManager.IsHost
+                        ? "Host connected"
+                        : "Client connected")
+                    : status);
+
+            NetworkMatchState match =
+                FindFirstObjectByType<NetworkMatchState>();
+
+            if (match != null && match.IsSpawned)
+            {
+                GUILayout.Label($"Match: {match.Phase}");
+
+                if (localPlayer != null && match.CanChangeReady)
+                {
+                    string buttonText =
+                        localPlayer.IsReady
+                            ? "Set Not Ready"
+                            : "Ready Up";
+
+                    if (GUILayout.Button(buttonText))
+                    {
+                        localPlayer.SubmitLocalReady(
+                            !localPlayer.IsReady);
+                    }
+                }
+            }
+
+            GUI.enabled =
+                networkManager != null &&
+                !networkManager.ShutdownInProgress;
+
+            if (networkManager != null &&
+                networkManager.IsListening)
             {
                 if (GUILayout.Button("Stop session"))
                     StopSession();
@@ -212,9 +256,11 @@ namespace NetworkTankArena.Networking
             {
                 if (GUILayout.Button("Start Host"))
                     StartHost();
+
                 if (GUILayout.Button("Start Client (localhost)"))
                     StartClient();
             }
+
             GUI.enabled = true;
             GUILayout.EndArea();
         }

@@ -4,6 +4,7 @@ using NetworkTankArena.Tanks;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace NetworkTankArena.Networking
 {
@@ -13,6 +14,13 @@ namespace NetworkTankArena.Networking
     {
         [SerializeField, Range(1f, 60f)] private float inputSendRate = 20f;
         [SerializeField, Min(0.1f)] private float inputTimeoutSeconds = 0.5f;
+
+        private readonly NetworkVariable<bool> ready = new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
+        public bool IsReady => ready.Value;
 
         private readonly NetworkVariable<float> turretYaw = new NetworkVariable<float>(0f,
             NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -62,6 +70,8 @@ namespace NetworkTankArena.Networking
             tank.ApplyReplicatedTurretYaw(turretYaw.Value);
             turretYaw.OnValueChanged += OnTurretYawChanged;
             BindLocalOwner();
+            if (IsServer)
+                FindFirstObjectByType<NetworkMatchState>()?.EvaluateReadyGate();
         }
 
         public override void OnGainedOwnership() => BindLocalOwner();
@@ -153,6 +163,35 @@ namespace NetworkTankArena.Networking
                 if (!projectile.GetComponent<NetworkProjectile>().SpawnOnServer(this))
                     Destroy(projectile.gameObject); // Failed before network spawn; never leave local gameplay.
             }
+        }
+
+        public void SubmitLocalReady(bool desiredReady)
+        {
+            if (CanReadLocalInput)
+                RequestReadyRpc(desiredReady);
+        }
+
+        [Rpc(SendTo.Server, Delivery = RpcDelivery.Reliable, InvokePermission = RpcInvokePermission.Owner)]
+        private void RequestReadyRpc(bool desiredReady, RpcParams rpcParams = default)
+        {
+            // validate sender == owner and PlayerObject == this NetworkObject
+            if (!IsSpawned || !IsServer || NetworkManager.ShutdownInProgress)
+                return;
+
+            ulong sender = rpcParams.Receive.SenderClientId;
+            // Check that the sender is the owner of this NetworkObject and that the sender's PlayerObject is this NetworkObject
+            if (sender != OwnerClientId || !NetworkManager.ConnectedClients.TryGetValue(sender, out var client) ||
+                client.PlayerObject != NetworkObject)
+                return;
+
+            NetworkMatchState match = FindFirstObjectByType<NetworkMatchState>();
+            // Check that the match state exists, is spawned, is on the server, and can change ready state
+            if (match == null || !match.IsSpawned || !match.IsServer || !match.CanChangeReady)
+                return;
+
+            // server writes ready.Value, then evaluates NetworkMatchState.
+            ready.Value = desiredReady;
+            match.EvaluateReadyGate(); // Notify all clients of the new ready state and check if the match can start.
         }
 
         internal void RegisterProjectile(NetworkProjectile projectile) => projectiles.Add(projectile);
